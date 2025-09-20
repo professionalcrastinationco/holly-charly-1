@@ -1,0 +1,52 @@
+:root {
+  --bg: #f3f8ff;
+  --ink: #1b263b;
+  --accent: #ff8c42;       /* orange tabby accent */
+  --accent-2: #ffd166;     /* golden retriever accent */
+  --candy-1: #8ecae6;
+  --candy-2: #ffcad4;
+  --candy-3: #caffbf;
+  --ui: #ffffff;
+  --shadow: rgba(0,0,0,.12);
+  --good: #36c977;
+  --warn: #ff5757;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: linear-gradient(#dff6ff 0%, #fefefe 35%) fixed;
+  color: var(--ink);
+  font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+header.hud, footer.tips {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--ui); box-shadow: 0 2px 10px var(--shadow);
+}
+footer.tips { margin-top: 6px; font-size: 14px; color: #466; }
+
+.hud-left, .hud-right { display: flex; align-items: center; gap: 12px; }
+#score, #lives, #power { font-variant-numeric: tabular-nums; min-width: 70px; display: inline-block; text-align: right; }
+
+button, .toggle {
+  background: var(--ui); border: 1px solid #ccd; border-radius: 8px; padding: 7px 10px;
+  box-shadow: 0 2px 6px var(--shadow); cursor: pointer; color: var(--ink);
+}
+button:hover { transform: translateY(-1px); }
+.toggle input { margin-right: 6px; }
+
+main { display: grid; place-items: center; padding: 10px; }
+canvas#game {
+  background: linear-gradient(#9be7ff 0 40%, #8fd3fe 40% 41%, #7fd27f 41% 100%); /* sky/ground bands */
+  border-radius: 14px; border: 2px solid #cde; box-shadow: 0 12px 40px var(--shadow), inset 0 0 0 4px #fff8;
+}
+
+/* Pop score bubbles */
+.score-pop {
+  position: absolute; pointer-events: none; color: #173a1e; font-weight: 700;
+  text-shadow: 0 1px 0 #fff, 0 2px 0 #fff;
+}
+
+/* Accessibility helpers */
+button:focus, input:focus { outline: 3px solid #5ecfff; outline-offset: 2px; }
