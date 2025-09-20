@@ -1,1 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Holly & Charly — Coming Soon 🎮✨</title>
+  <meta name="description" content="A super‑cute coming soon page for Holly & Charly’s new game!" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Fredoka:wght@400..700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --pink: #ff8fb1;
+      --lavender: #c5b3ff;
+      --mint: #9bf0d3;
+      --lemon: #ffe083;
+      --sky: #a8e1ff;
+      --blue: #5b7cff;
+      --ink: #2b2b3a;
+      --bg: linear-gradient(180deg, #fff7fb 0%, #f7f4ff 45%, #f0fff9 100%);
+      --card: #ffffffcc;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+      --radius: 22px;
+    }
 
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Fredoka", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    .wrap {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: clamp(16px, 3vw, 32px);
+      position: relative;
+      isolation: isolate;
+    }
+
+    /* Floating shapes behind the card */
+    .bubble {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(2px);
+      opacity: .5;
+      z-index: -1;
+      animation: floaty 18s ease-in-out infinite;
+    }
+    .b1 { width: 180px; height: 180px; background: var(--lavender); left: -40px; top: 10vh; animation-delay: 0s; }
+    .b2 { width: 240px; height: 240px; background: var(--mint); right: -60px; top: 30vh; animation-delay: 2s; }
+    .b3 { width: 220px; height: 220px; background: var(--lemon); left: 10vw; bottom: -60px; animation-delay: 4s; }
+    .b4 { width: 160px; height: 160px; background: var(--sky); right: 8vw; bottom: 10vh; animation-delay: 1s; }
+
+    @keyframes floaty {
+      0%,100% { transform: translateY(0) translateX(0) rotate(0deg); }
+      50% { transform: translateY(-18px) translateX(10px) rotate(2deg); }
+    }
+
+    .card {
+      width: min(940px, 96vw);
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+      padding: clamp(18px, 4vw, 40px);
+      position: relative;
+      border: 3px solid #fff;
+    }
+
+    .top-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(90deg, var(--pink), var(--lavender));
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: .3px;
+      box-shadow: 0 8px 16px rgba(197,179,255,.35);
+    }
+
+    .title {
+      font-family: "Baloo 2", system-ui, sans-serif;
+      font-weight: 800;
+      font-size: clamp(36px, 7vw, 64px);
+      line-height: 1.05;
+      margin: 14px 0 10px;
+      display: flex; 
+      flex-wrap: wrap;
+      gap: .25em;
+      align-items: center;
+    }
+    .title .name { 
+      padding: 4px 12px; 
+      border-radius: 14px; 
+      background: var(--lemon);
+      transform: rotate(-1.5deg);
+    }
+    .title .and { font-size: .8em; opacity: .8; }
+    .title .name.two { background: var(--mint); transform: rotate(1.5deg); }
+
+    .subtitle {
+      font-size: clamp(18px, 2.8vw, 24px);
+      opacity: .85;
+      margin-bottom: 18px;
+    }
+
+    .pill-row {
+      display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 24px;
+    }
+    .pill {
+      padding: 8px 12px; border-radius: 999px; font-weight: 600; font-size: 14px;
+      display: inline-flex; align-items: center; gap: 8px; border: 2px dashed rgba(0,0,0,.06);
+      background: #fff;
+    }
+
+    .cta-row { display:flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .btn {
+      appearance: none; border: 0; cursor: pointer; font-weight: 800; letter-spacing: .4px; 
+      padding: 14px 18px; border-radius: 14px; transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+      box-shadow: 0 10px 0 rgba(0,0,0,.08);
+    }
+    .btn:active { transform: translateY(2px); box-shadow: 0 6px 0 rgba(0,0,0,.08); }
+    .btn-primary { background: linear-gradient(90deg, var(--pink), var(--lavender)); color: #fff; }
+    .btn-secondary { background: #fff; border: 2px solid var(--blue); color: var(--blue); }
+
+    .progress {
+      width: 100%; background: #fff; border-radius: 14px; padding: 8px; border: 2px dashed rgba(0,0,0,.06);
+    }
+    .bar {
+      height: 16px; border-radius: 10px; background: linear-gradient(90deg, var(--sky), var(--mint)); width: 38%; position: relative;
+    }
+    .bar::after { content: "Level 1: Building"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 700; color: #134; }
+
+    .footnote {
+      margin-top: 14px; font-size: 12px; opacity: .7;
+    }
+
+    /* Mascot corner stickers */
+    .sticker { position: absolute; font-size: clamp(28px, 6vw, 44px); pointer-events:none; }
+    .sticker.s1 { left: -10px; top: -10px; transform: rotate(-12deg); }
+    .sticker.s2 { right: -10px; top: -10px; transform: rotate(8deg); }
+    .sticker.s3 { left: -10px; bottom: -10px; transform: rotate(10deg); }
+    .sticker.s4 { right: -10px; bottom: -10px; transform: rotate(-10deg); }
+
+    /* Random sparkle container */
+    .sparkle { position: fixed; pointer-events:none; font-size: 22px; animation: rise 2.2s ease-out forwards; }
+    @keyframes rise {
+      0% { transform: translateY(0) scale(.6); opacity: 0; }
+      10% { opacity: 1; }
+      100% { transform: translateY(-90px) scale(1.2) rotate(6deg); opacity: 0; }
+    }
+
+    /* Confetti */
+    .confetti { position: fixed; width: 8px; height: 12px; opacity: 0; transform: translateY(-80px) rotate(0deg); animation: confetti-fall 1200ms ease-out forwards; border-radius: 2px; }
+    @keyframes confetti-fall {
+      0% { opacity: 1; }
+      100% { transform: translateY(110vh) rotate(420deg); opacity: 0; }
+    }
+
+    /* Dialog */
+    dialog { border: none; border-radius: 18px; padding: 20px; box-shadow: var(--shadow); width: min(520px, 92vw); }
+    dialog::backdrop { background: rgba(0,0,0,.16); }
+
+    /* Accessibility: reduce motion */
+    @media (prefers-reduced-motion: reduce) {
+      .bubble, .sparkle, .confetti { animation: none !important; }
+      .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- background bubbles -->
+    <div class="bubble b1"></div>
+    <div class="bubble b2"></div>
+    <div class="bubble b3"></div>
+    <div class="bubble b4"></div>
+
+    <main class="card" aria-labelledby="title">
+      <span class="sticker s1" aria-hidden="true">🦄</span>
+      <span class="sticker s2" aria-hidden="true">🌈</span>
+      <span class="sticker s3" aria-hidden="true">⭐</span>
+      <span class="sticker s4" aria-hidden="true">🎮</span>
+
+      <div class="top-badge" role="img" aria-label="Cute game loading">✨ Coming Soon ✨</div>
+      <h1 id="title" class="title">
+        <span class="name">Holly</span>
+        <span class="and">&amp;</span>
+        <span class="name two">Charly</span>
+        <span>are building a game!</span>
+      </h1>
+      <p class="subtitle">We’re crafting colorful levels, silly creatures, and lots of sparkle. Check back soon for the big reveal! 💖</p>
+
+      <div class="pill-row" aria-label="features">
+        <span class="pill">🧁 Super sweet vibes</span>
+        <span class="pill">🫧 Bubble pops</span>
+        <span class="pill">🌟 Friendly stars</span>
+        <span class="pill">🎵 Happy sounds</span>
+      </div>
+
+      <div class="progress" aria-label="progress to launch">
+        <div class="bar" style="--pct:38%"></div>
+      </div>
+      <p class="footnote">Pssst… tap the button to cheer them on! Confetti may happen. 🎉</p>
+
+      <div class="cta-row">
+        <button class="btn btn-primary" id="cheerBtn" aria-label="Cheer for Holly and Charly">Cheer for us! 🎉</button>
+        <button class="btn btn-secondary" id="aboutBtn" aria-label="About the creators">Meet the creators 💬</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- About dialog -->
+  <dialog id="aboutDialog" aria-labelledby="aboutTitle">
+    <h2 id="aboutTitle" style="margin:0 0 8px; font-family: 'Baloo 2', system-ui; font-size: 28px;">Meet the Creators</h2>
+    <p style="margin:0 0 10px;">Hi! We’re <strong>Holly</strong> &amp; <strong>Charly</strong> (age 7). We love rainbows, stickers, and making fun worlds.
+      Our game is all about being kind, collecting stars, and solving little puzzles. ✨</p>
+    <p style="margin:0 0 10px; font-size: 14px; opacity:.8;">Grown‑ups: no personal info is collected here. 💛</p>
+    <form method="dialog" style="text-align:right; margin-top: 10px;">
+      <button class="btn btn-primary">Yay!</button>
+    </form>
+  </dialog>
+
+  <script>
+    // Respect reduced motion
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Random sparkles: appear at random spots intermittently
+    const sparkleEmojis = ['✨','💖','🌟','🫧','💜','💙','💚','💛','🧁','🎀'];
+
+    function spawnSparkle(x = Math.random() * innerWidth, y = innerHeight - 20) {
+      if (prefersReduced) return;
+      const s = document.createElement('div');
+      s.className = 'sparkle';
+      s.textContent = sparkleEmojis[Math.floor(Math.random() * sparkleEmojis.length)];
+      s.style.left = (x - 10) + 'px';
+      s.style.top = (y - 10) + 'px';
+      document.body.appendChild(s);
+      setTimeout(() => s.remove(), 2300);
+    }
+
+    function sparkleLoop() {
+      if (prefersReduced) return;
+      const now = Date.now();
+      // burst of 1–3 sparkles from random positions
+      const count = 1 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        setTimeout(() => spawnSparkle(Math.random() * innerWidth, innerHeight - Math.random()*120 - 20), i * 120);
+      }
+      const delay = 1800 + Math.random() * 2600; // 1.8s – 4.4s
+      setTimeout(sparkleLoop, delay);
+    }
+    setTimeout(sparkleLoop, 1000);
+
+    // Confetti burst on cheer
+    function confettiBurst(x = innerWidth/2, y = innerHeight/2) {
+      if (prefersReduced) return;
+      const colors = ['#ff8fb1','#c5b3ff','#9bf0d3','#ffe083','#a8e1ff','#5b7cff'];
+      const pieces = 90;
+      for (let i = 0; i < pieces; i++) {
+        const c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = (x + (Math.random()*120 - 60)) + 'px';
+        c.style.top = (y + (Math.random()*40 - 20)) + 'px';
+        c.style.background = colors[i % colors.length];
+        c.style.transform += ` translateX(${(Math.random()*2-1)*80}px)`;
+        c.style.animationDuration = 900 + Math.random()*600 + 'ms';
+        c.style.opacity = 1;
+        document.body.appendChild(c);
+        setTimeout(() => c.remove(), 1600);
+      }
+    }
+
+    // Button handlers
+    const cheerBtn = document.getElementById('cheerBtn');
+    cheerBtn.addEventListener('click', (e) => {
+      const r = cheerBtn.getBoundingClientRect();
+      confettiBurst(r.left + r.width/2, r.top + scrollY);
+      for (let i = 0; i < 4; i++) setTimeout(() => spawnSparkle(r.left + r.width/2, r.top + scrollY + 20), i*100);
+    });
+
+    const aboutBtn = document.getElementById('aboutBtn');
+    const aboutDialog = document.getElementById('aboutDialog');
+    aboutBtn.addEventListener('click', () => aboutDialog.showModal());
+
+    // Fun wiggle on stickers every so often
+    const stickers = Array.from(document.querySelectorAll('.sticker'));
+    function wiggle(el){
+      if (prefersReduced) return;
+      el.animate([
+        { transform: el.style.transform + ' rotate(0deg) scale(1)' },
+        { transform: el.style.transform + ' rotate(6deg) scale(1.06)' },
+        { transform: el.style.transform + ' rotate(-5deg) scale(1.04)' },
+        { transform: el.style.transform + ' rotate(0deg) scale(1)' }
+      ], { duration: 800, easing: 'ease-in-out' });
+    }
+    function wiggleLoop(){
+      if (prefersReduced) return;
+      const el = stickers[Math.floor(Math.random()*stickers.length)];
+      wiggle(el);
+      setTimeout(wiggleLoop, 2200 + Math.random()*2600);
+    }
+    setTimeout(wiggleLoop, 1500);
+
+    // Keyboard fun: press space to cheer
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const cx = innerWidth/2;
+        const cy = innerHeight/2;
+        confettiBurst(cx, cy);
+        for (let i = 0; i < 4; i++) setTimeout(() => spawnSparkle(cx, cy+40), i*100);
+      }
+    });
+
+    // Resize safety for mobile address bar
+    addEventListener('resize', () => {
+      document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+    });
+  </script>
+</body>
+</html>
