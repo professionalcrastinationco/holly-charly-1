@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitten Adventure - A Fun Platformer Game!</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-header">
+            <div class="score-display">
+                <span>SCORE</span>
+                <span id="score">000000</span>
+            </div>
+            <div class="coins-display">
+                <span>TREATS</span>
+                <span id="treats">x00</span>
+            </div>
+            <div class="world-display">
+                <span>WORLD</span>
+                <span id="world">1-1</span>
+            </div>
+            <div class="time-display">
+                <span>TIME</span>
+                <span id="time">400</span>
+            </div>
+            <div class="lives-display">
+                <span>LIVES</span>
+                <span id="lives">3</span>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="game-controls">
+            <div class="control-hint">
+                <span>🎮 Controls:</span>
+                <span>← → Move | ↑/Space Jump | Shift Run</span>
+            </div>
+            <button id="pauseBtn">PAUSE</button>
+            <button id="easyModeBtn">EASY MODE: OFF</button>
+        </div>
+
+        <div id="game-over" class="overlay hidden">
+            <h2>Game Over!</h2>
+            <p>Your Score: <span id="final-score">0</span></p>
+            <button onclick="restartGame()">Play Again</button>
+        </div>
+
+        <div id="level-complete" class="overlay hidden">
+            <h2>Level Complete!</h2>
+            <p>Great Job! 🎉</p>
+            <p>Your Score: <span id="level-score">0</span></p>
+            <button onclick="nextLevel()">Next Level</button>
+        </div>
+
+        <div id="pause-menu" class="overlay hidden">
+            <h2>Game Paused</h2>
+            <button onclick="resumeGame()">Resume</button>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+
+    <script src="levels.js"></script>
+    <script src="entities.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
