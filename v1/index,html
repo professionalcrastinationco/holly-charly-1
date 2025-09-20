@@ -1,1 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kitten & Puppy Platformer — 1-1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="style.css" rel="stylesheet" />
+</head>
+<body>
+  <header class="hud">
+    <div class="hud-left">
+      <strong>Score:</strong> <span id="score">000000</span>
+      &nbsp;&nbsp; <strong>Lives:</strong> <span id="lives">3</span>
+      &nbsp;&nbsp; <strong>Power:</strong> <span id="power">Small</span>
+    </div>
+    <div class="hud-right">
+      <label class="toggle">
+        <input type="checkbox" id="easyMode" />
+        <span>Easy Mode</span>
+      </label>
+      <button id="restartBtn" title="Restart level">↻ Restart</button>
+      <button id="twoPlayerBtn" title="Toggle 2-player (local hot-seat)">2P: Off</button>
+      <button id="muteBtn" title="Mute/Unmute audio">🔈</button>
+    </div>
+  </header>
 
+  <main>
+    <canvas id="game" width="960" height="540" aria-label="Game canvas"></canvas>
+  </main>
+
+  <footer class="tips">
+    ← → move • ↑ or Space jump (hold to jump higher) • Shift run • X throw yarn (if powered)
+  </footer>
+
+  <script src="levels.js"></script>
+  <script src="entities.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
