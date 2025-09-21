@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitten Adventure</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(180deg, #87CEEB 0%, #98D8E8 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+        }
+        
+        #gameContainer {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        canvas {
+            border: 5px solid #FFB6C1;
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        #score {
+            font-size: 24px;
+            color: #FF69B4;
+            margin-top: 10px;
+        }
+        
+        #instructions {
+            font-size: 18px;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        
+        #gameOver h2 {
+            color: #FF69B4;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: #FFB6C1;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #FF69B4;
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        
+        #startScreen h1 {
+            color: #FF69B4;
+            margin-bottom: 20px;
+            font-size: 36px;
+        }
+        
+        #startScreen p {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="score">Marshmallows: 0</div>
+        <div id="instructions">Use Arrow Keys or A/D to move, Space to jump!</div>
+    </div>
+    
+    <div id="startScreen">
+        <h1>🐱 Kitten Adventure 🐱</h1>
+        <p>Help the kitten collect marshmallows!</p>
+        <p>Jump on the mean clouds to make them go away!</p>
+        <button onclick="startGame()">Start Game!</button>
+    </div>
+    
+    <div id="gameOver">
+        <h2>Great Job! 🎉</h2>
+        <p id="finalScore"></p>
+        <button onclick="resetGame()">Play Again!</button>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameStarted = false;
+        let score = 0;
+        let gameRunning = true;
+        
+        // Game objects
+        const kitten = {
+            x: 100,
+            y: 200,
+            width: 40,
+            height: 40,
+            velocityY: 0,
+            velocityX: 0,
+            jumping: false,
+            onGround: false,
+            color: '#FFA500'
+        };
+        
+        const platforms = [
+            {x: 0, y: 350, width: 800, height: 50, color: '#8FBC8F'},
+            {x: 200, y: 280, width: 100, height: 20, color: '#90EE90'},
+            {x: 400, y: 220, width: 120, height: 20, color: '#90EE90'},
+            {x: 580, y: 160, width: 100, height: 20, color: '#90EE90'},
+            {x: 300, y: 140, width: 80, height: 20, color: '#90EE90'}
+        ];
+        
+        let marshmallows = [
+            {x: 240, y: 240, width: 20, height: 20, collected: false},
+            {x: 450, y: 180, width: 20, height: 20, collected: false},
+            {x: 620, y: 120, width: 20, height: 20, collected: false},
+            {x: 330, y: 100, width: 20, height: 20, collected: false},
+            {x: 150, y: 310, width: 20, height: 20, collected: false}
+        ];
+        
+        let enemies = [
+            {x: 500, y: 320, width: 35, height: 35, velocityX: 1, alive: true},
+            {x: 350, y: 100, width: 35, height: 35, velocityX: -1, alive: true}
+        ];
+        
+        const keys = {};
+        
+        // Input handling
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === ' ') {
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        function drawKitten() {
+            ctx.fillStyle = kitten.color;
+            
+            // Body
+            ctx.beginPath();
+            ctx.ellipse(kitten.x + kitten.width/2, kitten.y + kitten.height/2, 
+                       kitten.width/2, kitten.height/2.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Head
+            ctx.beginPath();
+            ctx.arc(kitten.x + kitten.width/2, kitten.y + kitten.height/3, 
+                   kitten.width/3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ears
+            ctx.beginPath();
+            ctx.moveTo(kitten.x + kitten.width/3, kitten.y + kitten.height/4);
+            ctx.lineTo(kitten.x + kitten.width/4, kitten.y);
+            ctx.lineTo(kitten.x + kitten.width/2.5, kitten.y + kitten.height/4);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(kitten.x + 2*kitten.width/3, kitten.y + kitten.height/4);
+            ctx.lineTo(kitten.x + 3*kitten.width/4, kitten.y);
+            ctx.lineTo(kitten.x + 3*kitten.width/5, kitten.y + kitten.height/4);
+            ctx.fill();
+            
+            // Eyes
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(kitten.x + kitten.width/3, kitten.y + kitten.height/3, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(kitten.x + 2*kitten.width/3, kitten.y + kitten.height/3, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Tail
+            ctx.strokeStyle = kitten.color;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(kitten.x, kitten.y + kitten.height/2);
+            ctx.quadraticCurveTo(kitten.x - 15, kitten.y + kitten.height/3, 
+                                kitten.x - 10, kitten.y);
+            ctx.stroke();
+        }
+        
+        function drawMarshmallow(marsh) {
+            if (marsh.collected) return;
+            
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = '#FFB6C1';
+            ctx.lineWidth = 2;
+            
+            // Fluffy marshmallow shape
+            ctx.beginPath();
+            ctx.roundRect(marsh.x, marsh.y, marsh.width, marsh.height, 5);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Little face
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(marsh.x + 6, marsh.y + 8, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(marsh.x + 14, marsh.y + 8, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(marsh.x + 10, marsh.y + 12, 3, 0, Math.PI);
+            ctx.stroke();
+        }
+        
+        function drawEnemy(enemy) {
+            if (!enemy.alive) return;
+            
+            // Draw angry cloud
+            ctx.fillStyle = '#808080';
+            
+            // Cloud puffs
+            ctx.beginPath();
+            ctx.arc(enemy.x + 10, enemy.y + 20, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(enemy.x + 25, enemy.y + 20, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(enemy.x + 17, enemy.y + 10, 12, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Angry face
+            ctx.fillStyle = 'black';
+            ctx.fillRect(enemy.x + 8, enemy.y + 15, 4, 2);
+            ctx.fillRect(enemy.x + 22, enemy.y + 15, 4, 2);
+            
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(enemy.x + 10, enemy.y + 25);
+            ctx.lineTo(enemy.x + 24, enemy.y + 25);
+            ctx.stroke();
+        }
+        
+        function updateKitten() {
+            // Horizontal movement
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                kitten.velocityX = -4;
+            } else if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                kitten.velocityX = 4;
+            } else {
+                kitten.velocityX *= 0.8; // Friction
+            }
+            
+            // Jumping
+            if ((keys[' '] || keys['ArrowUp']) && kitten.onGround) {
+                kitten.velocityY = -12;
+                kitten.jumping = true;
+                kitten.onGround = false;
+            }
+            
+            // Apply gravity
+            kitten.velocityY += 0.5;
+            
+            // Update position
+            kitten.x += kitten.velocityX;
+            kitten.y += kitten.velocityY;
+            
+            // Keep kitten on screen
+            if (kitten.x < 0) kitten.x = 0;
+            if (kitten.x + kitten.width > canvas.width) kitten.x = canvas.width - kitten.width;
+            
+            // Check platform collisions
+            kitten.onGround = false;
+            for (let platform of platforms) {
+                if (kitten.x < platform.x + platform.width &&
+                    kitten.x + kitten.width > platform.x &&
+                    kitten.y < platform.y + platform.height &&
+                    kitten.y + kitten.height > platform.y) {
+                    
+                    // Landing on top
+                    if (kitten.velocityY > 0 && kitten.y < platform.y) {
+                        kitten.y = platform.y - kitten.height;
+                        kitten.velocityY = 0;
+                        kitten.onGround = true;
+                        kitten.jumping = false;
+                    }
+                }
+            }
+            
+            // Collect marshmallows
+            for (let marsh of marshmallows) {
+                if (!marsh.collected &&
+                    kitten.x < marsh.x + marsh.width &&
+                    kitten.x + kitten.width > marsh.x &&
+                    kitten.y < marsh.y + marsh.height &&
+                    kitten.y + kitten.height > marsh.y) {
+                    
+                    marsh.collected = true;
+                    score++;
+                    document.getElementById('score').textContent = `Marshmallows: ${score}`;
+                    
+                    if (score === marshmallows.length) {
+                        endGame();
+                    }
+                }
+            }
+            
+            // Enemy collisions
+            for (let enemy of enemies) {
+                if (enemy.alive &&
+                    kitten.x < enemy.x + enemy.width &&
+                    kitten.x + kitten.width > enemy.x &&
+                    kitten.y < enemy.y + enemy.height &&
+                    kitten.y + kitten.height > enemy.y) {
+                    
+                    // Jumping on enemy
+                    if (kitten.velocityY > 0 && kitten.y < enemy.y) {
+                        enemy.alive = false;
+                        kitten.velocityY = -8; // Bounce
+                    } else if (enemy.alive) {
+                        // Hit by enemy - just bounce back
+                        kitten.velocityX = (kitten.x < enemy.x) ? -8 : 8;
+                        kitten.velocityY = -5;
+                    }
+                }
+            }
+            
+            // Fall off screen = respawn
+            if (kitten.y > canvas.height) {
+                kitten.x = 100;
+                kitten.y = 200;
+                kitten.velocityY = 0;
+                kitten.velocityX = 0;
+            }
+        }
+        
+        function updateEnemies() {
+            for (let enemy of enemies) {
+                if (!enemy.alive) continue;
+                
+                enemy.x += enemy.velocityX;
+                
+                // Reverse direction at edges
+                if (enemy.x <= 0 || enemy.x + enemy.width >= canvas.width) {
+                    enemy.velocityX *= -1;
+                }
+                
+                // Keep on platforms
+                for (let platform of platforms) {
+                    if (enemy.y + enemy.height === platform.y) {
+                        if (enemy.x < platform.x - enemy.width || 
+                            enemy.x > platform.x + platform.width) {
+                            enemy.velocityX *= -1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw clouds in background
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(100, 50, 30, 0, Math.PI * 2);
+            ctx.arc(130, 50, 35, 0, Math.PI * 2);
+            ctx.arc(160, 50, 30, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(600, 80, 25, 0, Math.PI * 2);
+            ctx.arc(625, 80, 30, 0, Math.PI * 2);
+            ctx.arc(650, 80, 25, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw platforms
+            for (let platform of platforms) {
+                ctx.fillStyle = platform.color;
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                
+                // Add grass texture to main ground
+                if (platform.height === 50) {
+                    ctx.fillStyle = '#228B22';
+                    for (let i = 0; i < platform.width; i += 20) {
+                        ctx.beginPath();
+                        ctx.moveTo(platform.x + i, platform.y);
+                        ctx.lineTo(platform.x + i + 5, platform.y - 5);
+                        ctx.lineTo(platform.x + i + 10, platform.y);
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            // Draw marshmallows
+            for (let marsh of marshmallows) {
+                drawMarshmallow(marsh);
+            }
+            
+            // Draw enemies
+            for (let enemy of enemies) {
+                drawEnemy(enemy);
+            }
+            
+            // Draw kitten
+            drawKitten();
+        }
+        
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            updateKitten();
+            updateEnemies();
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameStarted = true;
+            gameLoop();
+        }
+        
+        function endGame() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = 
+                `You collected all ${score} marshmallows! Amazing!`;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function resetGame() {
+            score = 0;
+            gameRunning = true;
+            kitten.x = 100;
+            kitten.y = 200;
+            kitten.velocityX = 0;
+            kitten.velocityY = 0;
+            
+            marshmallows.forEach(m => m.collected = false);
+            enemies.forEach(e => e.alive = true);
+            
+            document.getElementById('score').textContent = 'Marshmallows: 0';
+            document.getElementById('gameOver').style.display = 'none';
+            
+            gameLoop();
+        }
+    </script>
+</body>
+</html>
