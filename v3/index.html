@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kitten & Puppy Adventure</title>
+  <style>
+    :root{
+      --pink:#ff8ec7; --mint:#a7f3d0; --sky:#bfe3ff; --violet:#c7b8ff; --sun:#ffd86b; --grass:#68c174; --earth:#bd8b6f; --tube:#d2c9c2;
+      --ink:#1b2733;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    body{display:grid;place-items:center;background:linear-gradient(180deg,var(--sky),#e9f6ff 60%);
+      overflow:hidden}
+    .wrap{display:flex;flex-direction:column;gap:.5rem;align-items:center;width:100%;max-width:1100px;padding:12px}
+    h1{font-size:clamp(1.1rem,2.2vw,1.6rem);margin:0;color:var(--ink)}
+    .hud{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center}
+    .badge{background:white;border-radius:999px;padding:6px 12px;box-shadow:0 2px 6px rgba(0,0,0,.08);border:1px solid #eee}
+    .controls{font-size:.9rem;color:#2b3a44}
+    canvas{width:100%; max-width:1100px; aspect-ratio:16/9; background:linear-gradient(180deg, transparent 0 65%, #9be17f 65% 70%, #75c363 70% 100%);
+      border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.12);}
+    button{border:none;background:var(--pink);color:#15202b;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.1)}
+    button.alt{background:var(--mint)}
+    .legend{font-size:.85rem;line-height:1.35;color:#26323c;max-width:980px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🐾 Kitten & Puppy Adventure — a kid‑friendly platformer</h1>
+    <div class="hud">
+      <span class="badge" id="status">Ready!</span>
+      <span class="badge">Lives: <b id="lives">3</b></span>
+      <span class="badge">Fish Treats: <b id="treats">0</b></span>
+      <span class="badge">Has Yarn: <b id="yarn">No</b></span>
+      <button id="reset">Restart</button>
+      <button id="toggleP2" class="alt">P2: Off</button>
+      <button id="pauseBtn" class="alt">Pause</button>
+      <button id="runTests" class="alt">Run Tests</button>
+    </div>
+    <canvas id="game" width="960" height="540" aria-label="Kitten and Puppy game world" role="img"></canvas>
+    <div class="legend controls">
+      <b>Player 1 (Kitten):</b> ◄ ► move, ▲ / Space jump (hold to jump higher), Shift run, <kbd>Z</kbd> throw yarn (with power‑up).<br>
+      <b>Player 2 (Puppy — optional):</b> A/D move, W jump, <kbd>G</kbd> throw yarn. Toggle with “P2: Off/On”.<br>
+      Jump on angry chocolate chips to boop them away. Gummy bears hide in their candy shells when jumped on! Question blocks can hold a Fish Treat (grow bigger) or Yarn Ball (throw yarn). Reach the kitty cat tree flag to win.
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // ===== Helpers
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function aabb(a,b){return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y}
+
+  // ===== Camera
+  const camera={x:0,y:0};
+  function worldToScreenX(x){return Math.floor(x-camera.x)}
+  function worldToScreenY(y){return Math.floor(y-camera.y)}
+
+  // ===== Input
+  const keys={};
+  addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(['Space','ArrowUp'].includes(e.code)) e.preventDefault();});
+  addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+
+  // ===== Entities
+  class Entity{
+    constructor(x,y,w,h){Object.assign(this,{x,y,w,h,vx:0,vy:0,onGround:false,dir:1,alive:true,hidden:false})}
+    rect(){return {x:this.x,y:this.y,w:this.w,h:this.h}}
+  }
+
+  // Player class
+  class Player extends Entity{
+    constructor(kind,x,y,controls){
+      super(x,y,28,32); // base size
+      this.kind=kind; // 'kitten' | 'puppy'
+      this.big=false; this.hasYarn=false; this.cooldown=0; this.inv=0; this.controls=controls; this.lives=3; this.name=kind==='kitten'? 'Kitten':'Puppy';
+    }
+    get speed(){return keys[this.controls.run]? 2.1:1.4}
+    get jumpPower(){return 5.0*(this.big?1.05:1)}
+    handleInput(){
+      const L=keys[this.controls.left], R=keys[this.controls.right], J=(keys[this.controls.jump]||keys[' ']);
+      // fixed precedence bug: (R?1:0) - (L?1:0)
+      this.vx = ((R?1:0) - (L?1:0)) * this.speed * 60/1000*48; // scaled to tile size/sec
+      if(J && this.onGround){ this.vy = -this.jumpPower*48/60; this.onGround=false; this.jumpHeld=true; this.jumpTime=0; }
+      if(J && this.jumpHeld && this.jumpTime<12){ this.vy -= 0.35; this.jumpTime++; }
+      if(!J) this.jumpHeld=false;
+      // Throw yarn
+      if(this.hasYarn && this.cooldown<=0 && keys[this.controls.throw]){
+        shootYarn(this);
+        this.cooldown=18; // frames
+      }
+      if(this.cooldown>0) this.cooldown--;
+      if(this.inv>0) this.inv--;
+    }
+    grow(){this.big=true; this.h=44; this.y-=12}
+    shrink(){this.big=false; this.h=32}
+    hurt(){ if(this.inv>0) return; if(this.big){ this.shrink(); this.inv=60; flash('Ouch! Lost big power.'); } else { loseLife(this); } }
+    powerYarn(){ this.hasYarn=true; flash(`${this.name} got a Yarn Ball! (Z/G)`); updateHud(); }
+  }
+
+  const players=[];
+  const kittenControls={left:'arrowleft',right:'arrowright',jump:'arrowup',run:'shift',throw:'z'};
+  const puppyControls={left:'a',right:'d',jump:'w',run:'shift',throw:'g'};
+  const kitten=new Player('kitten', 64, H-200, kittenControls);
+  players.push(kitten);
+  let p2Enabled=false; let puppy=null;
+
+  // Projectiles
+  const projectiles=[];
+  function shootYarn(p){
+    const b = new Entity(p.x+(p.dir>0?p.w:0)-4, p.y+8, 8,8);
+    b.vx = (p.dir>0?1:-1)*5; b.vy=0; b.owner=p; b.type='yarn';
+    projectiles.push(b);
+  }
+
+  // ===== Level (tilemap)
+  // 0 empty, 1 ground, 2 grass top, 3 cardboard tube, 4 question block, 5 used block, 6 brick, 7 flag pole, 8 cat tree, 9 platform
+  const TILE=48; const ROWS=12; const COLS=300; const LEVEL=[];
+  for(let r=0;r<ROWS;r++){ LEVEL[r]=new Array(COLS).fill(0); }
+  // Ground and terrain
+  for(let c=0;c<COLS;c++){
+    LEVEL[ROWS-2][c]=2; // grass top
+    for(let r=ROWS-1;r<ROWS;r++) LEVEL[r][c]=1; // dirt below
+  }
+  // Simple hills/platforms
+  function box(x,y,w,h,t){ for(let r=y;r<y+h;r++) for(let c=x;c<x+w;c++) LEVEL[r][c]=t; }
+  box(20, 6, 6, 1, 9); // small platform
+  box(36, 7, 5, 1, 9);
+  box(60, 5, 6, 1, 9);
+  // Cardboard tubes (pipes)
+  function tube(col, height){ for(let r=ROWS-2;r>ROWS-2-height;r--) LEVEL[r][col]=3; }
+  tube(26,2); tube(40,3); tube(70,4);
+  // Question blocks & bricks section
+  LEVEL[6][24]=4; LEVEL[6][25]=6; LEVEL[6][26]=4; LEVEL[6][27]=6; LEVEL[6][28]=4;
+  LEVEL[8][46]=4; LEVEL[8][47]=4; LEVEL[8][48]=4; // mid stretch
+  // Final flag/cat tree
+  LEVEL[ROWS-3][280]=7; LEVEL[ROWS-4][280]=7; LEVEL[ROWS-5][280]=7; LEVEL[ROWS-6][280]=7; LEVEL[ROWS-7][280]=7; // pole
+  LEVEL[ROWS-8][282]=8; // cat tree topper
+
+  // Blocks contents map
+  const blockLoot = new Map(); // key "r,c" -> 'fish' | 'yarn'
+  blockLoot.set('6,24','fish'); blockLoot.set('6,26','yarn'); blockLoot.set('6,28','fish');
+  blockLoot.set('8,46','fish'); blockLoot.set('8,47','yarn'); blockLoot.set('8,48','fish');
+
+  // ===== Enemies & NPCs
+  const enemies=[]; // chocolate chips (goomba-like), gummy bears (koopa-like)
+  class Enemy extends Entity{
+    constructor(type,x,y){ super(x,y,28,28); this.type=type; this.dir=-1; this.speed=0.7; this.shell=false; this.shellTimer=0; }
+  }
+  function addEnemy(type, col, row){ enemies.push(new Enemy(type,col*TILE, row*TILE-28)); }
+  addEnemy('chip', 18, ROWS-2); addEnemy('chip', 30, ROWS-2); addEnemy('gummy', 50, ROWS-2); addEnemy('chip', 66, ROWS-2); addEnemy('gummy', 74, ROWS-2);
+
+  // Marshmallow NPCs (friendly)
+  const npcs=[ new Entity(12*TILE, (ROWS-3)*TILE-30, 26,32), new Entity(58*TILE, (ROWS-3)*TILE-30, 26,32)];
+
+  // Powerups
+  const powerups=[]; // {type:'fish'|'yarn', x,y,w,h, vy}
+
+  // ===== Collision helpers with tiles
+  function tileAt(x,y){
+    const c=Math.floor(x/TILE), r=Math.floor(y/TILE); if(r<0||r>=ROWS||c<0||c>=COLS) return 0; return LEVEL[r][c];
+  }
+  function isSolid(t){ return t===1||t===2||t===3||t===5||t===6||t===7||t===8||t===9 }
+  function collideEntity(e){
+    e.onGround=false;
+    // Horizontal (robust stepping; avoids float equality loops)
+    let remainingX = e.vx;
+    while(Math.abs(remainingX) > 0){
+      const step = Math.abs(remainingX) > 4 ? 4*Math.sign(remainingX) : remainingX;
+      const nx = e.x + step;
+      if(hitsSolid(nx,e.y,e.w,e.h)){ e.vx=0; break; } else { e.x = nx; remainingX -= step; }
+    }
+    // Vertical with gravity
+    e.vy += 0.35; if(e.vy>10) e.vy=10; // gravity
+    let remainingY = e.vy;
+    while(Math.abs(remainingY) > 0){
+      const stepY = Math.abs(remainingY) > 4 ? 4*Math.sign(remainingY) : remainingY;
+      const ny = e.y + stepY;
+      if(hitsSolid(e.x,ny,e.w,e.h)){
+        if(stepY>0){ e.onGround=true; }
+        e.vy=0; break;
+      } else { e.y = ny; remainingY -= stepY; }
+    }
+  }
+  function hitsSolid(x,y,w,h){
+    const x0=Math.floor(x/TILE), x1=Math.floor((x+w-1)/TILE);
+    const y0=Math.floor(y/TILE), y1=Math.floor((y+h-1)/TILE);
+    for(let r=y0;r<=y1;r++){
+      for(let c=x0;c<=x1;c++){
+        const t=(r>=0&&c>=0&&r<ROWS&&c<COLS)?LEVEL[r][c]:1;
+        if(isSolid(t)){
+          // special: question block (4) considered non-solid but we need bump from below
+          if(t===5) return true; // used block solid
+          if(t===6) return true; // brick solid
+          if(t===3||t===1||t===2||t===7||t===8||t===9) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Interactions with tiles (question blocks, bricks, flag)
+  function handleHeadBump(p){
+    // Check tile just above top center
+    const cx = Math.floor((p.x+p.w/2)/TILE); const r = Math.floor((p.y-2)/TILE);
+    if(r>=0){
+      const t = LEVEL[r][cx];
+      if(t===4){ // question block -> pop loot
+        const key=`${r},${cx}`; const loot = blockLoot.get(key)|| (Math.random()<0.5?'fish':'yarn');
+        LEVEL[r][cx]=5; // used block
+        spawnPower(loot, cx*TILE+8, r*TILE-30);
+      } else if(t===6){ // brick -> bump (kids-safe: no breaking)
+        // little bop animation could go here
+      }
+    }
+  }
+  function spawnPower(type,x,y){ powerups.push({type,x,y,w:24,h:24,vy:-4,life:999}); }
+
+  // ===== Game state
+  let paused=false, won=false;
+  const statusEl=document.getElementById('status');
+  const livesEl=document.getElementById('lives');
+  const treatsEl=document.getElementById('treats');
+  const yarnEl=document.getElementById('yarn');
+  document.getElementById('reset').onclick=()=>resetGame();
+  document.getElementById('toggleP2').onclick=()=>{ toggleP2(); };
+  document.getElementById('pauseBtn').onclick=()=>{ paused=!paused; statusEl.textContent=paused? 'Paused':'Go!'; };
+
+  function updateHud(){
+    livesEl.textContent = kitten.lives + (puppy? ` / ${puppy.lives}`:"");
+    treatsEl.textContent = (kitten.big?1:0) + (puppy && puppy.big?1:0);
+    yarnEl.textContent = (kitten.hasYarn|| (puppy && puppy.hasYarn))? 'Yes':'No';
+  }
+  function flash(msg){ statusEl.textContent=msg; setTimeout(()=>statusEl.textContent='Go!',1200); }
+
+  function loseLife(p){
+    p.lives--; p.inv=40; p.x = Math.max(camera.x+40, 64); p.y = 0; p.vx=0; p.vy=0; p.big=false;
+    if(p.lives<0){ p.alive=false; flash(`${p.name} is tired. Press Restart.`); }
+    updateHud();
+  }
+
+  function toggleP2(){
+    if(p2Enabled){ players.splice(players.indexOf(puppy),1); puppy=null; p2Enabled=false; document.getElementById('toggleP2').textContent='P2: Off'; }
+    else { puppy=new Player('puppy', kitten.x-40, kitten.y, puppyControls); puppy.lives=3; players.push(puppy); p2Enabled=true; document.getElementById('toggleP2').textContent='P2: On'; }
+    updateHud();
+  }
+
+  function resetGame(){
+    // reset players and state
+    camera.x=0; won=false; paused=false; statusEl.textContent='Go!';
+    kitten.x=64; kitten.y=H-200; kitten.vx=0; kitten.vy=0; kitten.big=false; kitten.hasYarn=false; kitten.lives=3; kitten.alive=true; kitten.inv=0;
+    if(puppy){ puppy.x=kitten.x-40; puppy.y=kitten.y; puppy.vx=0; puppy.vy=0; puppy.big=false; puppy.hasYarn=false; puppy.lives=3; puppy.alive=true; puppy.inv=0; }
+    // reset enemies
+    enemies.length=0; addEnemy('chip', 18, ROWS-2); addEnemy('chip', 30, ROWS-2); addEnemy('gummy', 50, ROWS-2); addEnemy('chip', 66, ROWS-2); addEnemy('gummy', 74, ROWS-2);
+    // reset powerups and blocks
+    powerups.length=0; projectiles.length=0;
+    // reset question blocks to original contents
+    ['6,24','6,26','6,28','8,46','8,47','8,48'].forEach(k=>{const [r,c]=k.split(',').map(Number); LEVEL[r][c]=4;});
+    updateHud();
+  }
+
+  // ===== Rendering helpers
+  function drawRoundedRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fill(); }
+
+  function drawTile(t, x, y){
+    if(t===0) return;
+    x=worldToScreenX(x); y=worldToScreenY(y);
+    switch(t){
+      case 1: ctx.fillStyle='#a5775f'; ctx.fillRect(x,y,TILE,TILE); break; // earth
+      case 2: // grass top
+        ctx.fillStyle='#8bdc73'; ctx.fillRect(x,y,TILE,Math.floor(TILE*0.35));
+        ctx.fillStyle='#a5775f'; ctx.fillRect(x,y+Math.floor(TILE*0.35),TILE,TILE-Math.floor(TILE*0.35));
+        break;
+      case 3: // cardboard tube (fixed typo TILE-12)
+        ctx.fillStyle='#ddcfbf'; drawRoundedRect(x+6,y, TILE-12, TILE, 10);
+        break;
+      case 4: // question block
+        ctx.fillStyle='#ffd86b'; ctx.fillRect(x,y,TILE,TILE); ctx.fillStyle='#b98b36'; ctx.fillRect(x+6,y+6,TILE-12,TILE-12);
+        ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.fillText('?',x+TILE/2-6,y+TILE/2+6);
+        break;
+      case 5: // used block
+        ctx.fillStyle='#c0b0a0'; ctx.fillRect(x,y,TILE,TILE); break;
+      case 6: // brick
+        ctx.fillStyle='#b36b54'; ctx.fillRect(x,y,TILE,TILE); ctx.fillStyle='#8e4f3b';
+        for(let i=0;i<3;i++){ ctx.fillRect(x+2,y+2+i*14,TILE-4,10); }
+        break;
+      case 7: // flag pole
+        ctx.fillStyle='#ffffff'; ctx.fillRect(x+TILE/2-3,y,6,TILE);
+        break;
+      case 8: // cat tree topper
+        ctx.fillStyle='#e5d2c4'; drawRoundedRect(x+6,y+6,TILE-12,TILE-12,12);
+        ctx.fillStyle='#c7a98e'; ctx.fillRect(x+TILE/2-4,y+TILE-20,8,20);
+        break;
+      case 9: // floating platform
+        ctx.fillStyle='#7acb70'; drawRoundedRect(x+4,y+8,TILE-8,20,8);
+        ctx.fillStyle='#5da65a'; ctx.fillRect(x+8,y+28,TILE-16,6);
+        break;
+    }
+  }
+
+  // Friendly marshmallow draw
+  function drawMarshmallow(m){ if(m.hidden) return; const x=worldToScreenX(m.x), y=worldToScreenY(m.y);
+    ctx.fillStyle='white'; drawRoundedRect(x,y,m.w,m.h,8); ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(x+8,y+12,2,0,Math.PI*2); ctx.arc(x+m.w-8,y+12,2,0,Math.PI*2); ctx.fill(); }
+
+  function drawEnemy(e){ if(!e.alive) return; const x=worldToScreenX(e.x), y=worldToScreenY(e.y); if(e.type==='chip'){
+      // angry chocolate chip
+      ctx.fillStyle='#6b3d27'; drawRoundedRect(x,y,e.w,e.h,6); ctx.fillStyle='#fff'; ctx.fillRect(x+6,y+6,6,6); ctx.fillRect(x+e.w-12,y+6,6,6);
+    } else {
+      // gummy bear
+      ctx.fillStyle=e.shell? '#b0b0b0':'#ff7ab3'; drawRoundedRect(x,y,e.w,e.h,10); ctx.fillStyle='#333'; ctx.fillRect(x+8,y+8,4,4); ctx.fillRect(x+e.w-12,y+8,4,4);
+    }
+  }
+
+  function drawPlayer(p){ const x=worldToScreenX(p.x), y=worldToScreenY(p.y);
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(x+p.w/2,y+p.h, p.w/2,6, 0,0,Math.PI*2); ctx.fill();
+    // body
+    if(p.kind==='kitten'){
+      ctx.fillStyle='#f5a15e'; // orange tabby
+      drawRoundedRect(x,y,p.w,p.h,8); // body
+      // ears
+      ctx.fillRect(x+4,y-8,8,8); ctx.fillRect(x+p.w-12,y-8,8,8);
+    } else {
+      ctx.fillStyle='#f3d08b'; // golden retriever puppy
+      drawRoundedRect(x,y,p.w,p.h,8); ctx.fillRect(x+2,y-6,10,6); ctx.fillRect(x+p.w-12,y-6,10,6);
+    }
+    // face
+    ctx.fillStyle='#333'; ctx.fillRect(x+8,y+10,4,4); ctx.fillRect(x+p.w-12,y+10,4,4);
+    // power indicators
+    if(p.big){ ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(x-2,y-2,p.w+4,p.h+4); }
+    if(p.hasYarn){ ctx.fillStyle='#ff9bd2'; ctx.beginPath(); ctx.arc(x+p.w/2,y-10,6,0,Math.PI*2); ctx.fill(); }
+  }
+
+  function drawProjectile(b){ const x=worldToScreenX(b.x), y=worldToScreenY(b.y); ctx.fillStyle='#ff8ec7'; ctx.beginPath(); ctx.arc(x+4,y+4,4,0,Math.PI*2); ctx.fill(); }
+
+  // ===== Win check as a function so tests can call it
+  function checkWin(){
+    if(!won){ const poleX=280*TILE; if(kitten.x>poleX-10){ won=true; statusEl.textContent='You reached the Cat Tree! You win!'; paused=true; } }
+    return won;
+  }
+
+  // ===== Game Loop
+  function update(){
+    if(paused){ draw(); requestAnimationFrame(update); return; }
+    // players input and physics
+    for(const p of players){ if(!p.alive) continue; p.handleInput(); p.dir = p.vx>0?1:(p.vx<0?-1:p.dir); const preVy=p.vy; collideEntity(p); if(preVy<0 && p.vy===0){ handleHeadBump(p); } }
+
+    // enemies AI
+    for(const e of enemies){ if(!e.alive) continue; e.vx = (e.shell?0:e.dir*0.8); collideEntity(e);
+      // turn at ledges or walls
+      const frontX = e.x + (e.dir>0? e.w+1 : -1); const belowY = e.y + e.h + 1; const tileFrontBelow = tileAt(frontX, belowY);
+      const tileFront = tileAt(frontX, e.y+e.h/2);
+      if(!isSolid(tileFrontBelow) || isSolid(tileFront)) e.dir*=-1;
+      // shell timer recovery
+      if(e.shell){ e.shellTimer++; if(e.shellTimer>240){ e.shell=false; e.shellTimer=0; }
+      }
+    }
+
+    // projectiles
+    for(const b of projectiles){ b.x += b.vx; if(hitsSolid(b.x,b.y,b.w,b.h)) b.life=0; for(const e of enemies){ if(e.alive && aabb(b,e)){ e.alive=false; b.life=0; flash('Candy cleared!'); } } }
+    for(let i=projectiles.length-1;i>=0;i--) if(projectiles[i].life===0) projectiles.splice(i,1);
+
+    // powerups float up then fall & pickup
+    for(const u of powerups){ u.vy += 0.25; u.y += u.vy; if(hitsSolid(u.x,u.y,u.w,u.h)){ u.vy=0; }
+      for(const p of players){ if(p.alive && aabb(p,u)){ if(u.type==='fish'){ if(!p.big) p.grow(); else p.lives++; flash(`${p.name} munched a Fish Treat!`); } else { p.powerYarn(); }
+        u.life=0; updateHud(); }
+      }
+    }
+    for(let i=powerups.length-1;i>=0;i--) if(powerups[i].life===0) powerups.splice(i,1);
+
+    // player vs enemy
+    for(const p of players){ if(!p.alive) continue; for(const e of enemies){ if(!e.alive) continue; if(aabb(p,e)){
+          if(p.vy>0 && p.y+ p.h - e.y < 16){ // stomp from top
+            p.vy = -4; if(e.type==='gummy' && !e.shell){ e.shell=true; e.shellTimer=0; } else { e.alive=false; }
+            flash('Boop!');
+          } else { p.hurt(); }
+      } }
+    }
+
+    // camera follow player 1
+    camera.x = clamp(kitten.x - W*0.35, 0, COLS*TILE - W);
+
+    // win condition
+    checkWin();
+
+    draw();
+    requestAnimationFrame(update);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // sky decorations
+    drawClouds();
+
+    // tiles in view
+    const c0=Math.floor(camera.x/TILE)-1, c1=Math.floor((camera.x+W)/TILE)+1;
+    for(let r=0;r<ROWS;r++){
+      for(let c=Math.max(0,c0); c<Math.min(COLS,c1); c++) drawTile(LEVEL[r][c], c*TILE, r*TILE);
+    }
+
+    // NPCs
+    for(const m of npcs){ drawMarshmallow(m); }
+
+    // entities
+    for(const e of enemies) drawEnemy(e);
+    for(const u of powerups){ const x=worldToScreenX(u.x), y=worldToScreenY(u.y); if(u.type==='fish'){ ctx.fillStyle='#ffa95d'; drawRoundedRect(x,y,u.w,u.h,6); ctx.fillStyle='#fff'; ctx.fillRect(x+6,y+8,12,6); } else { ctx.fillStyle='#ff8ec7'; ctx.beginPath(); ctx.arc(x+12,y+12,12,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#e86aa8'; ctx.lineWidth=2; ctx.beginPath(); for(let i=0;i<8;i++){ const a=i*Math.PI/4; ctx.moveTo(x+12,y+12); ctx.lineTo(x+12+Math.cos(a)*12,y+12+Math.sin(a)*12);} ctx.stroke(); }
+    }
+    for(const b of projectiles) drawProjectile(b);
+    for(const p of players) drawPlayer(p);
+  }
+
+  function drawClouds(){
+    const clouds=[{x:50,y:60},{x:350,y:40},{x:700,y:70},{x:1050,y:55}];
+    ctx.fillStyle='rgba(255,255,255,.9)';
+    for(const cl of clouds){ const x=worldToScreenX(cl.x+camera.x*0.2), y=cl.y; ctx.beginPath(); ctx.ellipse(x,y,30,18,0,0,Math.PI*2); ctx.ellipse(x+26,y+6,24,14,0,0,Math.PI*2); ctx.ellipse(x-28,y+8,22,12,0,0,Math.PI*2); ctx.fill(); }
+  }
+
+  // ===== Simple Test Harness =====
+  const testsBtn = document.getElementById('runTests');
+  testsBtn.addEventListener('click', runTests);
+
+  function runTests(){
+    const results=[]; const t=(name,fn)=>{ try{ fn(); results.push({name,pass:true}); }catch(e){ results.push({name,pass:false,err:e}); } };
+    const expect=(cond,msg)=>{ if(!cond) throw new Error(msg||'Assertion failed'); };
+
+    // Pause updates while testing
+    const prevPaused = paused; paused = true;
+    const prevP2 = p2Enabled; if(prevP2) toggleP2();
+
+    // 1) aabb collision true/false
+    t('aabb overlap', ()=>{ const A={x:0,y:0,w:10,h:10}, B={x:5,y:5,w:10,h:10}; expect(aabb(A,B),'should overlap'); });
+    t('aabb no overlap', ()=>{ const A={x:0,y:0,w:10,h:10}, B={x:20,y:20,w:5,h:5}; expect(!aabb(A,B),'should not overlap'); });
+
+    // 2) tileAt known tiles
+    t('tileAt ground (type 2 at grass top row)', ()=>{ const tval = tileAt(10*TILE, (ROWS-2)*TILE+1); expect(tval===2, 'expected grass top (2)'); });
+    t('tileAt question block (type 4 at 6,24)', ()=>{ const tval = tileAt(24*TILE+1, 6*TILE+1); expect(tval===4, `expected question block (4), got ${tval}`); });
+
+    // 3) drawTile tube should not throw (regression for TILE typo)
+    t('drawTile type 3 (cardboard tube) no-throw', ()=>{ drawTile(3, 0, 0); });
+
+    // 4) shootYarn adds a projectile
+    t('shootYarn spawns projectile', ()=>{ const before=projectiles.length; kitten.hasYarn=true; shootYarn(kitten); expect(projectiles.length===before+1,'projectile not added'); projectiles.length=before; });
+
+    // 5) handleHeadBump converts question block to used block and spawns powerup
+    t('handleHeadBump pops loot and marks used', ()=>{
+      const beforePower = powerups.length;
+      kitten.x = 24*TILE + 10; kitten.y = 6*TILE + 4; // so (y-2)/TILE floors to 6
+      handleHeadBump(kitten);
+      const tval = LEVEL[6][24];
+      expect(tval===5, `expected used block (5), got ${tval}`);
+      expect(powerups.length===beforePower+1, 'powerup should spawn');
+      // cleanup
+      LEVEL[6][24]=4; powerups.length=beforePower;
+    });
+
+    // 6) movement math: right - left precedence
+    t('movement math precedence', ()=>{
+      const K=kitten; const oldVX=K.vx; const saveKeys={...keys};
+      keys['arrowright']=true; keys['arrowleft']=false; K.handleInput(); expect(K.vx>0,'expected positive vx when Right only');
+      keys['arrowright']=false; keys['arrowleft']=true; K.handleInput(); expect(K.vx<0,'expected negative vx when Left only');
+      keys['arrowright']=false; keys['arrowleft']=false; K.handleInput(); expect(K.vx===0,'expected zero vx when no keys');
+      Object.assign(keys,saveKeys); K.vx=oldVX;
+    });
+
+    // 7) collideEntity stepping should advance by non-multiple-of-4 without hanging
+    t('collideEntity handles fractional steps', ()=>{
+      const e = new Entity(100, 100, 10, 10); e.vx=3; const x0=e.x; collideEntity(e); expect(Math.abs((e.x-x0)-3)<0.01,'should move ~3px');
+    });
+
+    // 8) fish treat & yarn power direct effects
+    t('grow() increases size', ()=>{ const K=kitten; K.big=false; K.h=32; K.grow(); expect(K.big && K.h===44,'grow should set big + height 44'); K.shrink(); });
+    t('powerYarn sets hasYarn', ()=>{ const K=kitten; K.hasYarn=false; K.powerYarn(); expect(K.hasYarn,'expected hasYarn true'); K.hasYarn=false; });
+
+    // 9) win condition when passing pole
+    t('checkWin triggers when past flag', ()=>{
+      const prevX=kitten.x, prevPaused=paused, prevWon=won; statusEl.textContent='Go!';
+      kitten.x = 280*TILE + 20; paused=false; won=false; const ok = checkWin();
+      expect(ok && paused && won, 'expected win + paused');
+      // cleanup
+      kitten.x = prevX; paused=prevPaused; won=prevWon; statusEl.textContent='Go!';
+    });
+
+    // restore state
+    if(prevP2) toggleP2();
+    paused = prevPaused;
+
+    // Report
+    const ok = results.every(r=>r.pass);
+    console.groupCollapsed(`Game Tests: ${ok? 'ALL PASSED ✅': 'Some FAILED ❌'}`);
+    results.forEach(r=>{ if(r.pass) console.log('✔', r.name); else console.error('✖', r.name, r.err); });
+    console.groupEnd();
+    statusEl.textContent = ok? 'Tests passed ✅' : 'Tests failed ❌ (see console)';
+    setTimeout(()=>statusEl.textContent='Go!', 2000);
+  }
+
+  // ===== Kickoff
+  resetGame();
+  updateHud();
+  requestAnimationFrame(update);
+})();
+</script>
+</body>
+</html>
