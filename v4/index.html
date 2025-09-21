@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candy Land Platformer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Comic Sans MS', cursive;
+        }
+        
+        #gameContainer {
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 100%);
+            image-rendering: crisp-edges;
+        }
+        
+        #characterSelect {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .charButton {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            font-family: 'Comic Sans MS', cursive;
+        }
+        
+        .charButton:hover {
+            transform: scale(1.1);
+        }
+        
+        #catBtn {
+            background: #FF8C42;
+            color: white;
+        }
+        
+        #dogBtn {
+            background: #FFD700;
+            color: #333;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .heart {
+            display: inline-block;
+            color: #FF1744;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="characterSelect">
+            <h2>Choose Your Character!</h2>
+            <button id="catBtn" class="charButton">🐱 Orange Kitty</button>
+            <button id="dogBtn" class="charButton">🐶 Golden Puppy</button>
+        </div>
+        <div id="ui" style="display: none;">
+            <div>Score: <span id="score">0</span></div>
+            <div>Lives: <span id="lives"></span></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 1024;
+        canvas.height = 576;
+        
+        const gravity = 0.5;
+        let camera = { x: 0, y: 0 };
+        let score = 0;
+        let lives = 5;
+        let gameStarted = false;
+        let particles = [];
+        let hearts = [];
+        let fallingHearts = [];
+        
+        // Input handling
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        class Player {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 40;
+                this.velX = 0;
+                this.velY = 0;
+                this.speed = 3;
+                this.jumpPower = -12;
+                this.grounded = false;
+                this.type = type;
+                this.scale = 1;
+                this.dead = false;
+                this.respawnTimer = 0;
+                this.jumpHeldTime = 0;
+            }
+            
+            update() {
+                if (this.dead) {
+                    this.respawnTimer--;
+                    if (this.respawnTimer <= 0) {
+                        this.respawn();
+                    }
+                    this.y += 8;
+                    this.x += this.velX * 0.5;
+                    return;
+                }
+                
+                // Running
+                const speedMultiplier = keys['Shift'] ? 1.8 : 1;
+                
+                // Movement
+                if (keys['ArrowLeft']) {
+                    this.velX = -this.speed * speedMultiplier;
+                } else if (keys['ArrowRight']) {
+                    this.velX = this.speed * speedMultiplier;
+                } else {
+                    this.velX *= 0.8;
+                }
+                
+                // Variable jump height
+                if ((keys['ArrowUp'] || keys[' ']) && this.grounded) {
+                    this.velY = this.jumpPower;
+                    this.grounded = false;
+                    this.jumpHeldTime = 0;
+                } else if ((keys['ArrowUp'] || keys[' ']) && this.jumpHeldTime < 10 && this.velY < 0) {
+                    this.velY -= 0.3;
+                    this.jumpHeldTime++;
+                }
+                
+                if (!keys['ArrowUp'] && !keys[' ']) {
+                    this.jumpHeldTime = 20;
+                }
+                
+                // Apply gravity
+                this.velY += gravity;
+                if (this.velY > 15) this.velY = 15;
+                
+                // Update position
+                this.x += this.velX;
+                this.y += this.velY;
+                
+                // Keep player in bounds
+                if (this.x < 0) this.x = 0;
+                
+                // Fall death
+                if (this.y > canvas.height + 100) {
+                    this.die();
+                }
+            }
+            
+            die() {
+                if (this.dead) return;
+                this.dead = true;
+                this.respawnTimer = 60;
+                lives--;
+                
+                // Death particles
+                for (let i = 0; i < 10; i++) {
+                    particles.push({
+                        x: this.x + this.width/2,
+                        y: this.y + this.height/2,
+                        velX: (Math.random() - 0.5) * 8,
+                        velY: Math.random() * -10,
+                        color: this.type === 'cat' ? '#FF8C42' : '#FFD700',
+                        life: 30
+                    });
+                }
+                
+                if (lives <= 0) {
+                    // Game over - restart
+                    setTimeout(() => {
+                        lives = 5;
+                        score = 0;
+                        this.respawn();
+                    }, 2000);
+                }
+            }
+            
+            respawn() {
+                this.x = 100;
+                this.y = 300;
+                this.velX = 0;
+                this.velY = 0;
+                this.dead = false;
+                this.scale = 1;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x - camera.x + this.width/2, this.y - camera.y + this.height/2);
+                
+                if (this.dead) {
+                    ctx.rotate(Date.now() * 0.01);
+                    ctx.globalAlpha = Math.max(0, this.respawnTimer / 60);
+                }
+                
+                const size = this.width * this.scale;
+                
+                if (this.type === 'cat') {
+                    // Orange striped cat
+                    ctx.fillStyle = '#FF8C42';
+                    ctx.fillRect(-size/2, -size/2, size, size);
+                    
+                    // Stripes
+                    ctx.fillStyle = '#FF6B1A';
+                    for (let i = 0; i < 4; i++) {
+                        ctx.fillRect(-size/2, -size/2 + i * size/4, size, size/8);
+                    }
+                    
+                    // Face
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(-size/4, -size/4, 4, 4);
+                    ctx.fillRect(size/4 - 4, -size/4, 4, 4);
+                    
+                    // Ears
+                    ctx.fillStyle = '#FF8C42';
+                    ctx.beginPath();
+                    ctx.moveTo(-size/2, -size/2);
+                    ctx.lineTo(-size/3, -size/2 - 10);
+                    ctx.lineTo(-size/4, -size/2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(size/4, -size/2);
+                    ctx.lineTo(size/3, -size/2 - 10);
+                    ctx.lineTo(size/2, -size/2);
+                    ctx.fill();
+                } else {
+                    // Golden retriever
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(-size/2, -size/2, size, size);
+                    
+                    // Face
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(-size/4, -size/4, 4, 4);
+                    ctx.fillRect(size/4 - 4, -size/4, 4, 4);
+                    ctx.fillRect(-2, 0, 4, 4);
+                    
+                    // Ears
+                    ctx.fillStyle = '#DAA520';
+                    ctx.fillRect(-size/2 - 5, -size/4, 8, 15);
+                    ctx.fillRect(size/2 - 3, -size/4, 8, 15);
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        class Enemy {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.width = 30;
+                this.height = 30;
+                this.velX = type === 'chip' ? 1.5 : 1;
+                this.velY = 0;
+                this.grounded = false;
+            }
+            
+            update() {
+                // Simple AI - move back and forth
+                this.x += this.velX;
+                
+                // Check platform edges and turn around
+                const ahead = this.velX > 0 ? this.x + this.width + 10 : this.x - 10;
+                let onPlatform = false;
+                
+                for (let platform of platforms) {
+                    if (ahead >= platform.x && ahead <= platform.x + platform.width &&
+                        this.y + this.height + 10 >= platform.y && this.y + this.height + 10 <= platform.y + platform.height) {
+                        onPlatform = true;
+                        break;
+                    }
+                }
+                
+                if (!onPlatform) {
+                    this.velX *= -1;
+                }
+                
+                // Apply gravity
+                this.velY += gravity;
+                if (this.velY > 10) this.velY = 10;
+                this.y += this.velY;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x - camera.x, this.y - camera.y);
+                
+                if (this.type === 'chip') {
+                    // Angry chocolate chip
+                    ctx.fillStyle = '#654321';
+                    ctx.beginPath();
+                    ctx.arc(this.width/2, this.height/2, this.width/2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Angry face
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(5, 8, 4, 4);
+                    ctx.fillRect(20, 8, 4, 4);
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(8, 20);
+                    ctx.lineTo(22, 20);
+                    ctx.stroke();
+                } else {
+                    // Gummy bear
+                    ctx.fillStyle = this.velX > 0 ? '#FF69B4' : '#90EE90';
+                    ctx.fillRect(5, 0, 20, 25);
+                    ctx.fillRect(0, 5, 30, 20);
+                    
+                    // Face
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(8, 8, 3, 3);
+                    ctx.fillRect(19, 8, 3, 3);
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        class Platform {
+            constructor(x, y, width, height, type = 'normal') {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.type = type;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x - camera.x, this.y - camera.y);
+                
+                if (this.type === 'tube') {
+                    // Cardboard tube
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(0, 0, this.width, this.height);
+                    ctx.fillStyle = '#A0522D';
+                    ctx.fillRect(5, 5, this.width - 10, this.height - 10);
+                } else {
+                    // Regular platform
+                    ctx.fillStyle = '#4CAF50';
+                    ctx.fillRect(0, 0, this.width, this.height);
+                    ctx.fillStyle = '#388E3C';
+                    ctx.fillRect(0, 0, this.width, 5);
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        class PowerUp {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 30;
+                this.collected = false;
+            }
+            
+            draw() {
+                if (this.collected) return;
+                
+                ctx.save();
+                ctx.translate(this.x - camera.x, this.y - camera.y);
+                
+                // Ice cream cone
+                ctx.fillStyle = '#D2691E';
+                ctx.beginPath();
+                ctx.moveTo(15, 30);
+                ctx.lineTo(10, 15);
+                ctx.lineTo(20, 15);
+                ctx.fill();
+                
+                // Ice cream
+                ctx.fillStyle = '#FFB6C1';
+                ctx.beginPath();
+                ctx.arc(15, 10, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+        
+        class Heart {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 40;
+                this.triggered = false;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x - camera.x + this.width/2, this.y - camera.y + this.height/2);
+                
+                const scale = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+                ctx.scale(scale, scale);
+                
+                ctx.fillStyle = '#FF1744';
+                ctx.font = '40px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('❤️', 0, 0);
+                
+                ctx.restore();
+            }
+            
+            trigger() {
+                if (this.triggered) return;
+                this.triggered = true;
+                
+                // Rain hearts
+                for (let i = 0; i < 50; i++) {
+                    setTimeout(() => {
+                        fallingHearts.push({
+                            x: Math.random() * canvas.width,
+                            y: -20,
+                            velY: 2 + Math.random() * 2,
+                            size: 10 + Math.random() * 20,
+                            life: 200
+                        });
+                    }, i * 50);
+                }
+                
+                score += 100;
+                createScorePopup(this.x, this.y, '+100');
+            }
+        }
+        
+        class NPC {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 35;
+                this.height = 40;
+                this.bounce = 0;
+            }
+            
+            update() {
+                this.bounce = Math.sin(Date.now() * 0.005) * 5;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x - camera.x, this.y - camera.y + this.bounce);
+                
+                // Marshmallow body
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 5, this.width, this.height - 5);
+                ctx.beginPath();
+                ctx.arc(this.width/2, 5, this.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Eyes
+                ctx.fillStyle = '#000';
+                ctx.fillRect(10, 10, 3, 3);
+                ctx.fillRect(22, 10, 3, 3);
+                
+                // Smile
+                ctx.beginPath();
+                ctx.arc(this.width/2, 15, 8, 0, Math.PI);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+        }
+        
+        // Level design
+        const platforms = [
+            new Platform(0, 500, 300, 80),
+            new Platform(350, 450, 150, 20),
+            new Platform(550, 400, 100, 20),
+            new Platform(700, 350, 200, 20),
+            new Platform(950, 400, 100, 100, 'tube'),
+            new Platform(1100, 450, 150, 20),
+            new Platform(1300, 380, 100, 20),
+            new Platform(1450, 320, 150, 20),
+            new Platform(1650, 380, 100, 20),
+            new Platform(1800, 450, 100, 20),
+            new Platform(1950, 500, 400, 80),
+            new Platform(2400, 450, 100, 20),
+            new Platform(2550, 400, 100, 20),
+            new Platform(2700, 350, 200, 20),
+            new Platform(2950, 500, 500, 80),
+        ];
+        
+        const enemies = [
+            new Enemy(400, 420, 'chip'),
+            new Enemy(750, 320, 'gummy'),
+            new Enemy(1350, 350, 'chip'),
+            new Enemy(1850, 420, 'gummy'),
+            new Enemy(2750, 320, 'chip'),
+        ];
+        
+        const powerups = [
+            new PowerUp(600, 360),
+            new PowerUp(1500, 280),
+            new PowerUp(2600, 360),
+        ];
+        
+        const gameHearts = [
+            new Heart(800, 300),
+            new Heart(1700, 330),
+            new Heart(2800, 300),
+        ];
+        
+        const npcs = [
+            new NPC(250, 460),
+            new NPC(1200, 410),
+            new NPC(2000, 460),
+            new NPC(3100, 460),
+        ];
+        
+        let player = null;
+        
+        // Character selection
+        document.getElementById('catBtn').addEventListener('click', () => startGame('cat'));
+        document.getElementById('dogBtn').addEventListener('click', () => startGame('dog'));
+        
+        function startGame(type) {
+            document.getElementById('characterSelect').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            player = new Player(100, 300, type);
+            gameStarted = true;
+            updateUI();
+            gameLoop();
+        }
+        
+        function createScorePopup(x, y, text) {
+            particles.push({
+                x: x,
+                y: y,
+                text: text,
+                life: 60,
+                velY: -2,
+                type: 'score'
+            });
+        }
+        
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            let heartsHTML = '';
+            for (let i = 0; i < lives; i++) {
+                heartsHTML += '<span class="heart">❤️</span>';
+            }
+            document.getElementById('lives').innerHTML = heartsHTML;
+        }
+        
+        function checkCollisions() {
+            if (player.dead) return;
+            
+            // Platform collision
+            player.grounded = false;
+            for (let platform of platforms) {
+                // Top collision
+                if (player.x < platform.x + platform.width &&
+                    player.x + player.width > platform.x &&
+                    player.y < platform.y + platform.height &&
+                    player.y + player.height > platform.y) {
+                    
+                    // Land on top
+                    if (player.velY > 0 && player.y < platform.y) {
+                        player.y = platform.y - player.height;
+                        player.velY = 0;
+                        player.grounded = true;
+                    }
+                }
+            }
+            
+            // Enemy collision (ground them too)
+            for (let enemy of enemies) {
+                enemy.grounded = false;
+                for (let platform of platforms) {
+                    if (enemy.x < platform.x + platform.width &&
+                        enemy.x + enemy.width > platform.x &&
+                        enemy.y < platform.y + platform.height &&
+                        enemy.y + enemy.height > platform.y) {
+                        
+                        if (enemy.velY > 0 && enemy.y < platform.y) {
+                            enemy.y = platform.y - enemy.height;
+                            enemy.velY = 0;
+                            enemy.grounded = true;
+                        }
+                    }
+                }
+                
+                // Player-enemy collision
+                if (player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y) {
+                    
+                    if (player.velY > 0 && player.y < enemy.y) {
+                        // Stomp enemy
+                        enemies.splice(enemies.indexOf(enemy), 1);
+                        player.velY = -8;
+                        score += 50;
+                        createScorePopup(enemy.x, enemy.y, '+50');
+                        
+                        // Particles
+                        for (let i = 0; i < 5; i++) {
+                            particles.push({
+                                x: enemy.x + enemy.width/2,
+                                y: enemy.y + enemy.height/2,
+                                velX: (Math.random() - 0.5) * 6,
+                                velY: Math.random() * -8,
+                                color: enemy.type === 'chip' ? '#654321' : '#FF69B4',
+                                life: 20
+                            });
+                        }
+                    } else {
+                        // Hit by enemy
+                        player.die();
+                    }
+                }
+            }
+            
+            // Power-up collision
+            for (let powerup of powerups) {
+                if (!powerup.collected &&
+                    player.x < powerup.x + powerup.width &&
+                    player.x + player.width > powerup.x &&
+                    player.y < powerup.y + powerup.height &&
+                    player.y + player.height > powerup.y) {
+                    
+                    powerup.collected = true;
+                    player.scale = 1.5;
+                    score += 25;
+                    createScorePopup(powerup.x, powerup.y, '+25');
+                    
+                    // Rainbow particles
+                    for (let i = 0; i < 10; i++) {
+                        particles.push({
+                            x: powerup.x + powerup.width/2,
+                            y: powerup.y + powerup.height/2,
+                            velX: Math.cos(i * Math.PI / 5) * 4,
+                            velY: Math.sin(i * Math.PI / 5) * 4,
+                            color: `hsl(${i * 36}, 100%, 50%)`,
+                            life: 30
+                        });
+                    }
+                }
+            }
+            
+            // Heart collision
+            for (let heart of gameHearts) {
+                if (!heart.triggered &&
+                    player.x < heart.x + heart.width &&
+                    player.x + player.width > heart.x &&
+                    player.y < heart.y + heart.height &&
+                    player.y + player.height > heart.y) {
+                    heart.trigger();
+                }
+            }
+            
+            // Flag/Win condition
+            if (player.x > 3200) {
+                score += 500;
+                createScorePopup(player.x, player.y, 'LEVEL COMPLETE! +500');
+                player.x = 100;
+                player.y = 300;
+                // Reset level
+                powerups.forEach(p => p.collected = false);
+                gameHearts.forEach(h => h.triggered = false);
+            }
+        }
+        
+        function updateParticles() {
+            particles = particles.filter(p => {
+                if (p.type === 'score') {
+                    p.y += p.velY;
+                    p.life--;
+                    return p.life > 0;
+                } else {
+                    p.x += p.velX;
+                    p.y += p.velY;
+                    p.velY += 0.3;
+                    p.life--;
+                    return p.life > 0;
+                }
+            });
+            
+            fallingHearts = fallingHearts.filter(h => {
+                h.y += h.velY;
+                h.life--;
+                return h.life > 0 && h.y < canvas.height + 50;
+            });
+        }
+        
+        function drawBackground() {
+            // Clouds
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            for (let i = 0; i < 5; i++) {
+                let x = (i * 300 - camera.x * 0.3) % (canvas.width + 100);
+                ctx.beginPath();
+                ctx.arc(x, 100, 30, 0, Math.PI * 2);
+                ctx.arc(x + 25, 100, 35, 0, Math.PI * 2);
+                ctx.arc(x + 50, 100, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Draw falling hearts
+            ctx.fillStyle = '#FF1744';
+            ctx.font = '20px sans-serif';
+            for (let heart of fallingHearts) {
+                ctx.save();
+                ctx.globalAlpha = heart.life / 200;
+                ctx.fillText('❤️', heart.x - camera.x, heart.y - camera.y);
+                ctx.restore();
+            }
+        }
+        
+        function drawFlag() {
+            ctx.save();
+            ctx.translate(3300 - camera.x, 420 - camera.y);
+            
+            // Pole
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, 0, 10, 100);
+            
+            // Flag
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath();
+            ctx.moveTo(10, 10);
+            ctx.lineTo(60, 25);
+            ctx.lineTo(10, 40);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        function gameLoop() {
+            if (!gameStarted) return;
+            
+            // Clear
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawBackground();
+            
+            // Update
+            player.update();
+            enemies.forEach(e => e.update());
+            npcs.forEach(n => n.update());
+            checkCollisions();
+            updateParticles();
+            
+            // Camera follow
+            camera.x = player.x - canvas.width/2;
+            if (camera.x < 0) camera.x = 0;
+            
+            // Draw everything
+            platforms.forEach(p => p.draw());
+            powerups.forEach(p => p.draw());
+            gameHearts.forEach(h => h.draw());
+            npcs.forEach(n => n.draw());
+            enemies.forEach(e => e.draw());
+            player.draw();
+            drawFlag();
+            
+            // Draw particles
+            for (let p of particles) {
+                if (p.type === 'score') {
+                    ctx.save();
+                    ctx.globalAlpha = p.life / 60;
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 24px Comic Sans MS';
+                    ctx.fillText(p.text, p.x - camera.x, p.y - camera.y);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x - camera.x, p.y - camera.y, 5, 5);
+                }
+            }
+            
+            updateUI();
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
